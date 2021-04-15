@@ -11,7 +11,7 @@ Inputs include:
 - Push button switch for user to actuate clickpen
 - Dual-channel joystick, where each channel is a 10k Ohm potentiometer
 
-All switches are negative logic, where a press sends a digital LOW to the controller. the Arduino 10-bit ADC results in joystick values ranging from 0 to 1023.
+All switches are negative logic, where a press sends a digital LOW to the controller. The Arduino 10-bit ADC results in joystick values ranging from 0 to 1023.
 
 Outputs include:
 - 2x 12V 200 RPM DC Brushed motors
@@ -153,7 +153,7 @@ A single actuator initialization is defined to configure the three pins as outpu
 ```c
 //------------ActuatorInit-----------
 // Function to initialize the direction and enable pins of an actuator.
-// Inputs:  actuator      struct representing actuator configuration
+// Inputs:  actuator      struct pointer representing actuator configuration
 // Outputs: none
 void ActuatorInit(const ActuatorOut *actuator) {
   pinMode((*actuator).fwd_pin, OUTPUT);
@@ -182,7 +182,7 @@ A single function is defined to set actuator direction and magnitude. The magnit
 // Function to set the direction and magnitude of an actuator. Negative magnitude implies
 // Counter-Clockwise rotation for a motor and opposing polarity for an electromagnet
 // Inputs:  mag           magnitude of actuator effort between -255 and 255
-//          actuator      struct representing actuator configuration
+//          actuator      struct pointer representing actuator configuration
 // Outputs: none
 void SetActuator(int16_t mag, const ActuatorOut *actuator) {
   
@@ -265,3 +265,27 @@ Finally, when the button is released, the first_press variable is reset so that 
   }
 ```
 
+## Debugging
+### Serial
+This project uses every digital pin on the Arduino Uno, including pins 0 (Rx) and 1 (Tx), used for Serial communication. This means, there is no way to recieve usable information through the Serial Monitor/Plotter from the Arduino as long as pins 0 and 1 are in use. Thus, the X Motor ActuationInit and SetActuator calls are wrapped in a debug ifdef. To activate debugging and disable these calls automatically, comment out the DEBUG definition at the top of the file.
+
+```c
+//#define DEBUG
+```
+
+```c
+  // The X motor uses the same ports as the Serial Transmit and Recieve, so to debug it must be disabled
+  #ifndef DEBUG
+  ActuatorInit(&X_MOTOR_PINS);
+  #endif
+```
+
+```c
+  #ifndef DEBUG
+  SetActuator(x_motor_speed, &X_MOTOR_PINS);
+  #endif
+```
+For serial debugging, refer to the Arduino reference online.
+
+### Actuator Directions
+If you find that any actuators are going the wrong directions, it is easier to simple flip the two direction pin definitions at the top of the code rather than to rewire. This is fine. The only thing to be careful of is that <B>the two direction pins can never be set high at the same time or it may damage the H-Bridge and Arduino. </B> If constructing DIY, it is highly recommended to test each motor individually first to ensure correct polarities.
