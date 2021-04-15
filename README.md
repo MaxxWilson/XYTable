@@ -11,7 +11,7 @@ Inputs include:
 - Push button switch for user to actuate clickpen
 - Dual-channel joystick, where each channel is a 10k Ohm potentiometer
 
-All switches are negative logic, where a press sends a digital LOW to the controller. the Arduino 10-bit ADC results in joystick values ranging from 0 to 1023.
+All switches are negative logic, where a press sends a digital LOW to the controller. The Arduino 10-bit ADC results in joystick values ranging from 0 to 1023.
 
 Outputs include:
 - 2x 12V 200 RPM DC Brushed motors
@@ -129,7 +129,6 @@ void ClipValue(int16_t *val, int16_t lower_lim, int16_t upper_lim) {
 ```
 
 ## Actuator Abstraction
-
 All three actuators share a similar interface through the L298N Motor Driver. Thus, a struct type was defined containing the two direction pins and the enable pin. This struct is then used for each actuator definition.
 
 ```c
@@ -153,7 +152,7 @@ A single actuator initialization is defined to configure the three pins as outpu
 ```c
 //------------ActuatorInit-----------
 // Function to initialize the direction and enable pins of an actuator.
-// Inputs:  actuator      struct representing actuator configuration
+// Inputs:  actuator      struct pointer representing actuator configuration
 // Outputs: none
 void ActuatorInit(const ActuatorOut *actuator) {
   pinMode((*actuator).fwd_pin, OUTPUT);
@@ -166,10 +165,14 @@ void ActuatorInit(const ActuatorOut *actuator) {
 
 ```c
   // Initialize each actuator with two directional pins and an enable pin. The enable pin determines the
-  // speed of the motor, the directional pins determine which way it rotates. Direction pins should NEVER both be high.
-  ActuatorInit(&X_MOTOR_PINS);
+  // speed of the motor, the directional pins determine which way it rotates. Direction pins should NEVER both be high. 
   ActuatorInit(&Y_MOTOR_PINS);
   ActuatorInit(&ELECTROMAGNET_PINS);
+
+  // The X motor uses the same ports as the Serial Transmit and Recieve, so to debug it must be disabled
+  #ifndef DEBUG
+  ActuatorInit(&X_MOTOR_PINS);
+  #endif
 ```
 
 ### Set Actuator
@@ -182,7 +185,7 @@ A single function is defined to set actuator direction and magnitude. The magnit
 // Function to set the direction and magnitude of an actuator. Negative magnitude implies
 // Counter-Clockwise rotation for a motor and opposing polarity for an electromagnet
 // Inputs:  mag           magnitude of actuator effort between -255 and 255
-//          actuator      struct representing actuator configuration
+//          actuator      struct pointer representing actuator configuration
 // Outputs: none
 void SetActuator(int16_t mag, const ActuatorOut *actuator) {
   
@@ -209,13 +212,25 @@ void SetActuator(int16_t mag, const ActuatorOut *actuator) {
 #### Set Actuator Usage
 
 ```c
-  // Set Motors with filtered input commands
-  SetActuator(x_motor_speed, &X_MOTOR_PINS);
+    // Set Motors with filtered input commands
   SetActuator(y_motor_speed, &Y_MOTOR_PINS);
+
+  #ifndef DEBUG
+  SetActuator(x_motor_speed, &X_MOTOR_PINS);
+  #endif
 ```
 
 ```c
   SetActuator(255, &ELECTROMAGNET_PINS);
+```
+#### Motor Enable
+The electromagnet pulls a substantial amount of power when it is pulsed. As the pulse is typically short, we should disable the two motors for the duration of the pulse to lwoer peak amperage. enable_motors is defined as a boolean value that can be toggled by the electromagnet code to zero the motors during the pulse. This block occurs directly prior to the SetActuator Calls.
+
+```c
+  if(!enable_motors){
+    x_motor_speed = 0;
+    y_motor_speed = 0;
+  }
 ```
 
 ## Electromagnet Actuation and Debouncing
@@ -224,14 +239,16 @@ Electromagnet control is implemented in four steps, including the button input d
 A debouncer is implemented on the push button to filter user input into a usable digital signal. On the first press signal of the button in any given cycle, the debouncing mode variable is set to true and the time at which the button is pressed is stored. If the debouncing period passes and the button remains pressed, there is confidence that the signal is a legitimate user input. The first_press variable is set to false so that the electromagnet will only be actuated once for everytime the button is pressed (the button cannot be held). The electromagnet is then set high to begin the pulse, and the pulse start time is stored.
 
 ```c
-    // Electromagnet User Control
+  // Electromagnet User Control
   if (!digitalRead(CLICKPEN_BTN_PIN) && first_press){ // First button press
     if(!debouncing) {
       
       debouncing = true;
       debounce_start_time = millis();
       
+      #ifdef DEBUG
       Serial.println("DEBOUNCE");
+      #endif
     }
     else if(debouncing && (millis() > (debounce_start_time + DEBOUNCE_TIME)) && !pulse){ // After switch signal stabilizes
       pulse = true;
@@ -239,10 +256,13 @@ A debouncer is implemented on the push button to filter user input into a usable
       debouncing = false;
       
       pulse_start_time = millis();
-      
+
+      enable_motors = false;
       SetActuator(255, &ELECTROMAGNET_PINS);
 
+      #ifdef DEBUG
       Serial.println("PULSE");
+      #endif
     }
   }
 ```
@@ -254,6 +274,7 @@ Similar to the debouncer, the pulse will wait a certain duration before ending t
       pulse = false;
 
       SetActuator(0, &ELECTROMAGNET_PINS);
+      enable_motors = true;
   }
 ```
 
@@ -265,3 +286,27 @@ Finally, when the button is released, the first_press variable is reset so that 
   }
 ```
 
+## Debugging
+### Serial
+This project uses every digital pin on the Arduino Uno, including pins 0 (Rx) and 1 (Tx), used for Serial communication. This means, there is no way to recieve usable information through the Serial Monitor/Plotter from the Arduino as long as pins 0 and 1 are in use. Thus, the X Motor ActuationInit and SetActuator calls are wrapped in a debug ifdef. To activate debugging and disable these calls automatically, comment out the DEBUG definition at the top of the file.
+
+```c
+//#define DEBUG
+```
+
+```c
+  // The X motor uses the same ports as the Serial Transmit and Recieve, so to debug it must be disabled
+  #ifndef DEBUG
+  ActuatorInit(&X_MOTOR_PINS);
+  #endif
+```
+
+```c
+  #ifndef DEBUG
+  SetActuator(x_motor_speed, &X_MOTOR_PINS);
+  #endif
+```
+For serial debugging, refer to the Arduino reference online.
+
+### Actuator Directions
+If you find that any actuators are going the wrong directions, it is easier to simple flip the two direction pin definitions at the top of the code rather than to rewire. This is fine. The only thing to be careful of is that <B>the two direction pins can never be set high at the same time or it may damage the H-Bridge and Arduino. </B> If constructing DIY, it is highly recommended to test each motor individually first to ensure correct polarities.
