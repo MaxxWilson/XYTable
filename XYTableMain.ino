@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-//#define SERIAL_DEBUG true
+//#define DEBUG
 
 // Actuator Pins
 #define X_MOTOR_FWD_PIN 0
@@ -20,9 +20,9 @@
 #define Y_MOTOR_BWD_PIN 4
 #define Y_MOTOR_ENA_PIN 5
 
-#define EM_FWD_PIN 2
-#define EM_BWD_PIN 4
-#define EM_ENA_PIN 5
+#define EM_FWD_PIN 8
+#define EM_BWD_PIN 7
+#define EM_ENA_PIN 6
 
 // Limit Switch Pins
 #define X_RIGHT_LIM_PIN 9
@@ -50,6 +50,7 @@ uint16_t pulse_start_time = 0;
 #define X_MOTOR_MIN_POWER 100.
 #define Y_MOTOR_MIN_POWER 100.
 
+bool enable_motors = true;
 int16_t x_motor_speed = 0;
 int16_t y_motor_speed = 0;
 
@@ -80,7 +81,7 @@ int16_t j2m_offset_y = Y_MOTOR_MIN_POWER - JOYSTICK_THRESHOLD * j2m_scale_y;
 
 //------------ActuatorInit-----------
 // Function to initialize the direction and enable pins of an actuator.
-// Inputs:  actuator      struct representing actuator configuration
+// Inputs:  actuator      struct pointer representing actuator configuration
 // Outputs: none
 void ActuatorInit(const ActuatorOut *actuator) {
   pinMode((*actuator).fwd_pin, OUTPUT);
@@ -103,10 +104,11 @@ void ClipValue(int16_t *val, int16_t lower_lim, int16_t upper_lim) {
 // Function to set the direction and magnitude of an actuator. Negative magnitude implies
 // Counter-Clockwise rotation for a motor and opposing polarity for an electromagnet
 // Inputs:  mag           magnitude of actuator effort between -255 and 255
-//          actuator      struct representing actuator configuration
+//          actuator      struct pointer representing actuator configuration
 // Outputs: none
 void SetActuator(int16_t mag, const ActuatorOut *actuator) {
-  // Clip to 8-bit value
+  
+  // Clip to 255 and avoid overflow in 8-bit value
   ClipValue(&mag, -255, 255);
 
   if (mag > 0) { // Forward Direction
@@ -144,17 +146,21 @@ void setup() {
   */
   
   // Initialize each actuator with two directional pins and an enable pin. The enable pin determines the
-  // speed of the motor, the directional pins determine which way it rotates. Direction pins should NEVER both be high.
-  ActuatorInit(&X_MOTOR_PINS);
+  // speed of the motor, the directional pins determine which way it rotates. Direction pins should NEVER both be high. 
   ActuatorInit(&Y_MOTOR_PINS);
   ActuatorInit(&ELECTROMAGNET_PINS);
 
+  // The X motor uses the same ports as the Serial Transmit and Recieve, so to debug it must be disabled
+  #ifndef DEBUG
+  ActuatorInit(&X_MOTOR_PINS);
+  #endif
+  
   // Initialize each switch with input pullup for negative logic, meaning when you press the button, the voltage goes low (GND)
   pinMode(Y_UPPER_LIM_PIN, INPUT_PULLUP);
   pinMode(Y_LOWER_LIM_PIN, INPUT_PULLUP);
   pinMode(X_LEFT_LIM_PIN, INPUT_PULLUP);
   pinMode(X_RIGHT_LIM_PIN, INPUT_PULLUP);
-  //pinMode(CLICKPEN_BTN_PIN, INPUT_PULLUP);
+  pinMode(CLICKPEN_BTN_PIN, INPUT_PULLUP);
 
   // Initialize timer variables for user switch input
   debounce_start_time = millis();
@@ -192,46 +198,60 @@ void loop() {
   }
 
   /*
-  #ifdef SERIAL_DEBUG
+  #ifdef DEBUG
   Serial.print(x_motor_speed);
   Serial.print("\t");
   Serial.println(y_motor_speed);
   #endif
   */
-  
-  // Set Motors with filtered input commands
-  SetActuator(x_motor_speed, &X_MOTOR_PINS);
-  SetActuator(y_motor_speed, &Y_MOTOR_PINS);
 
   // Electromagnet User Control
   if (!digitalRead(CLICKPEN_BTN_PIN) && first_press){ // First button press
     if(!debouncing) {
       
-      debounce_start_time = millis();
       debouncing = true;
+      debounce_start_time = millis();
       
+      #ifdef DEBUG
       Serial.println("DEBOUNCE");
-      
+      #endif
     }
     else if(debouncing && (millis() > (debounce_start_time + DEBOUNCE_TIME)) && !pulse){ // After switch signal stabilizes
       pulse = true;
       first_press = false;
-      pulse_start_time = millis();
+      debouncing = false;
       
+      pulse_start_time = millis();
+
+      enable_motors = false;
       SetActuator(255, &ELECTROMAGNET_PINS);
 
+      #ifdef DEBUG
       Serial.println("PULSE");
+      #endif
     }
   }
 
   if(pulse && (millis() > (pulse_start_time + EM_PULSE_DURATION))){ // After pulse duration ends
-      debouncing = false;
       pulse = false;
 
       SetActuator(0, &ELECTROMAGNET_PINS);
+      enable_motors = true;
   }
 
   if (digitalRead(CLICKPEN_BTN_PIN) && !first_press){ // After button is released
     first_press = true;
   }
+
+  if(!enable_motors){
+    x_motor_speed = 0;
+    y_motor_speed = 0;
+  }
+
+    // Set Motors with filtered input commands
+  SetActuator(y_motor_speed, &Y_MOTOR_PINS);
+
+  #ifndef DEBUG
+  SetActuator(x_motor_speed, &X_MOTOR_PINS);
+  #endif
 }
