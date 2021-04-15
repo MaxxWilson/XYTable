@@ -43,8 +43,8 @@
 bool debouncing = false;
 bool pulse = false;
 bool first_press = true;
-uint16_t debounce_start_time = 0;
-uint16_t pulse_start_time = 0;
+unsigned long debounce_start_time = 0;
+unsigned long pulse_start_time = 0;
 
 // Actuator Variables
 #define X_MOTOR_MIN_POWER 100.
@@ -130,7 +130,7 @@ void SetActuator(int16_t mag, const ActuatorOut *actuator) {
 
 void setup() {
 
-  #ifdef SERIAL_DEBUG
+  #ifdef DEBUG
   Serial.begin(9600);
   #endif
 
@@ -197,16 +197,8 @@ void loop() {
     ClipValue(&y_motor_speed, 0, 255);
   }
 
-  /*
-  #ifdef DEBUG
-  Serial.print(x_motor_speed);
-  Serial.print("\t");
-  Serial.println(y_motor_speed);
-  #endif
-  */
-
   // Electromagnet User Control
-  if (!digitalRead(CLICKPEN_BTN_PIN) && first_press){ // First button press
+  if (!digitalRead(CLICKPEN_BTN_PIN) && first_press && !pulse){ // First button press
     if(!debouncing) {
       
       debouncing = true;
@@ -254,4 +246,36 @@ void loop() {
   #ifndef DEBUG
   SetActuator(x_motor_speed, &X_MOTOR_PINS);
   #endif
+
+  #ifdef DEBUG
+
+  if (!digitalRead(Y_LOWER_LIM_PIN) && !digitalRead(Y_UPPER_LIM_PIN)) {
+    Serial.print("pulse:\t");
+    Serial.println(pulse);
+    
+    Serial.print("debouncing:\t");
+    Serial.println(debouncing);
+    
+    Serial.print("first_press:\t");
+    Serial.println(first_press);    
+    
+    Serial.print("enable_motors:\t");
+    Serial.println(enable_motors);
+    
+    Serial.print("first_press:\t");
+    Serial.println(first_press);
+        
+    Serial.print("millis:\t");
+    Serial.println(millis());
+        
+    Serial.print("debounce_start_time:\t");
+    Serial.println(debounce_start_time);
+    
+    Serial.print("pulse_start_time:\t");
+    Serial.println(pulse_start_time);
+
+    Serial.print("\n\n");
+  }
+  #endif
+  
 }
