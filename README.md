@@ -22,8 +22,10 @@ Each output actuator interfaces with an L298N H-Bridge to control magnitude and 
 ## Joystick Motor Relation
 A deadband threshold is applied to zero joystick magnitudes beneath a certain threshold. Above this threshold, a linear equation is defined to produce maximally responsive and intuitive motor action from joystick inputs. These two actions are implemented using a piecewise function to map the joystick input to the motor outputs.
 
+<p align="center"> <img width="750" height="750" src="https://github.com/MaxxWilson/XYTable/blob/main/4_15%20Motor%20Joystick%20Mapping.PNG"> </p>
+
 First, the maximum motor and joystick values are identified for a single channel and direction (sign). This results in motor values between 0 and 255, and joystick values from 0 to 512. Then, a joystick threshold is experimentally determined by evaluating the maximum magnitudes that the joystick may come to rest at upon release. Finally, the minimum duty cycle (power) to move the motor is determined by incrementing the value until the motor moves on each axis.
 
 Define:
 
-<div align="center"> SCALE = (MOTOR_MAX_POWER - MOTOR_MIN_POWER)/(JOYSTICK_MAX_VALUE - JOYSTICK_THRESHOLD) <br> <br> OFFSET = MOTOR_MIN_POWER - JOYSTICK_THRESHOLD * SCALE; <br> <br> For INPUT < THRESHOLD, OUTPUT = 0; <br> <br> For THRESHOLD <= INPUT <= JOYSTICK_MAX_VALUE, OUTPUT = SCALE * INPUT + OFFSET;<div align="left">
+<p align="center"> SCALE = (MOTOR_MAX_POWER - MOTOR_MIN_POWER)/(JOYSTICK_MAX_VALUE - JOYSTICK_THRESHOLD) <br> <br> OFFSET = MOTOR_MIN_POWER - JOYSTICK_THRESHOLD * SCALE; <br> <br> For INPUT < THRESHOLD, OUTPUT = 0; <br> <br> For THRESHOLD <= INPUT <= JOYSTICK_MAX_VALUE, OUTPUT = SCALE * INPUT + OFFSET;<div align="left">
