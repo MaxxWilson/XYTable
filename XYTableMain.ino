@@ -167,8 +167,8 @@ void loop() {
   joystick_x_channel = analogRead(JOYSTICK_X_CHANNEL_PIN) - 512;
   joystick_y_channel = analogRead(JOYSTICK_Y_CHANNEL_PIN) - 512;
 
-  // Set offset sign based on sign of input value
   // Map joystick values to motor values so that it starts at min power to move motor.
+  // Set offset sign based on sign of input value
   x_channel_sign = (joystick_x_channel > 0) ? 1 : -1;
   x_motor_speed =  j2m_scale_x * joystick_x_channel + j2m_offset_x * x_channel_sign;
   x_motor_speed = (abs(joystick_x_channel) > JOYSTICK_THRESHOLD) ? x_motor_speed : 0;
@@ -199,11 +199,12 @@ void loop() {
   #endif
   */
   
-  // Set Actuators with filtered commands
+  // Set Motors with filtered input commands
   SetActuator(x_motor_speed, &X_MOTOR_PINS);
   SetActuator(y_motor_speed, &Y_MOTOR_PINS);
 
-  if (!digitalRead(CLICKPEN_BTN_PIN) && first_press){
+  // Electromagnet User Control
+  if (!digitalRead(CLICKPEN_BTN_PIN) && first_press){ // First button press
     if(!debouncing) {
       
       debounce_start_time = millis();
@@ -212,7 +213,7 @@ void loop() {
       Serial.println("DEBOUNCE");
       
     }
-    else if(debouncing && (millis() > (debounce_start_time + DEBOUNCE_TIME)) && !pulse){
+    else if(debouncing && (millis() > (debounce_start_time + DEBOUNCE_TIME)) && !pulse){ // After switch signal stabilizes
       pulse = true;
       first_press = false;
       pulse_start_time = millis();
@@ -223,14 +224,14 @@ void loop() {
     }
   }
 
-  if(pulse && (millis() > (pulse_start_time + EM_PULSE_DURATION))){
+  if(pulse && (millis() > (pulse_start_time + EM_PULSE_DURATION))){ // After pulse duration ends
       debouncing = false;
       pulse = false;
 
       SetActuator(0, &ELECTROMAGNET_PINS);
   }
 
-  if (digitalRead(CLICKPEN_BTN_PIN) && !first_press){
+  if (digitalRead(CLICKPEN_BTN_PIN) && !first_press){ // After button is released
     first_press = true;
   }
 }
